@@ -30,14 +30,18 @@ public class EndEc2Builder extends Builder {
 
 	@Override
 	public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener) throws InterruptedException, IOException {
+		tearDownInstances(instances, terminate, build, listener);
+		return true;
+	}
+
+	public static void tearDownInstances(String instances, boolean terminate, AbstractBuild<?, ?> build, BuildListener listener) throws IOException, InterruptedException {
 		EnvVars environment = build.getEnvironment(listener);
-		String instancesExpanded = environment.expand(this.instances);
-		String[] instances = instancesExpanded.split("\\s+");
+		String instancesExpanded = environment.expand(instances);
+		String[] instancesSplit = instancesExpanded.split("\\s+");
 		EC2Cloud ec2Cloud = EC2Cloud.get(); //TODO: allow user to select which cloud service to use
-		for (String instanceId : instances) {
+		for (String instanceId : instancesSplit) {
 			EC2Slave.terminate(ec2Cloud, instanceId, !terminate);
 		}
-		return true;
 	}
 
 	public String getInstances() {
