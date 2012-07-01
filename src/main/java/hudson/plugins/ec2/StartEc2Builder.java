@@ -1,5 +1,6 @@
 package hudson.plugins.ec2;
 
+import hudson.EnvVars;
 import hudson.Extension;
 import hudson.Launcher;
 import hudson.model.AbstractBuild;
@@ -34,11 +35,14 @@ public class StartEc2Builder extends Builder {
 		List<EC2Slave> newMachines = new ArrayList<EC2Slave>(templates.size());
 		PrintStream logger = listener.getLogger();
 		try {
+			int cloudNumber = 0;
 			for (SlaveTemplate template : templates) {
 				int count = getCountFromTags(template.getTags(), logger);
 				for(int i = 0; i < count; i++) {
 					template.parent = EC2Cloud.get(); //TODO: allow user to select which cloud service to use
-					EC2Slave newMachine = template.provision(listener);
+					EnvVars envVars = build.getEnvironment(listener);
+					envVars.put("CLOUD_NUMBER", "" + (cloudNumber++)); //Allow the user to use this in their tags
+					EC2Slave newMachine = template.provision(envVars, listener);
 					newMachines.add(newMachine);
 
 					logger.println("Created machine " + newMachine.getInstanceId());

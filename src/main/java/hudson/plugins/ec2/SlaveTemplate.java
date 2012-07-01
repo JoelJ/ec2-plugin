@@ -1,17 +1,16 @@
 package hudson.plugins.ec2;
 
+import hudson.EnvVars;
 import hudson.Extension;
 import hudson.Util;
 import hudson.model.Describable;
 import hudson.model.TaskListener;
 import hudson.model.Descriptor;
 import hudson.model.Descriptor.FormException;
-import hudson.model.Node.Mode;
 import hudson.model.Hudson;
 import hudson.model.Label;
 import hudson.model.Node;
 import hudson.model.labels.LabelAtom;
-import hudson.slaves.NodeProperty;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
 
@@ -168,12 +167,16 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
         return l==null || labelSet.contains(l);
     }
 
+	public EC2Slave provision(TaskListener listener) throws AmazonClientException, IOException {
+		return provision(new EnvVars(Collections.<String, String>emptyMap()), listener);
+	}
+
     /**
      * Provisions a new EC2 slave.
      *
      * @return always non-null. This needs to be then added to {@link Hudson#addNode(Node)}.
      */
-    public EC2Slave provision(TaskListener listener) throws AmazonClientException, IOException {
+    public EC2Slave provision(EnvVars envVars, TaskListener listener) throws AmazonClientException, IOException {
         PrintStream logger = listener.getLogger();
         AmazonEC2 ec2 = getParent().connect();
 
@@ -245,7 +248,9 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
                 HashSet<Tag> inst_tags = new HashSet<Tag>();
 
                 for(EC2Tag t : tags) {
-                    inst_tags.add(new Tag(t.getName(), t.getValue()));
+					String name = envVars.expand(t.getName());
+					String value = envVars.expand(t.getValue());
+					inst_tags.add(new Tag(name, value));
                 }
 
                 CreateTagsRequest tag_request = new CreateTagsRequest();
