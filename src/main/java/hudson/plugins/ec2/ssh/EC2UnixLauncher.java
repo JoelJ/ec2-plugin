@@ -196,17 +196,7 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
                 }
 
                 int port = computer.getSshPort();
-                logger.println("Connecting to " + host + " on port " + port + ". ");
-                Connection conn = new Connection(host, port);
-                // currently OpenSolaris offers no way of verifying the host certificate, so just accept it blindly,
-                // hoping that no man-in-the-middle attack is going on.
-                conn.connect(new ServerHostKeyVerifier() {
-                    public boolean verifyServerHostKey(String hostname, int port, String serverHostKeyAlgorithm, byte[] serverHostKey) throws Exception {
-                        return true;
-                    }
-                });
-                logger.println("Connected via SSH.");
-                return conn; // successfully connected
+				return testConnection(logger, host, port);
             } catch (IOException e) {
                 // keep retrying until SSH comes up
                 logger.println("Waiting for SSH to come up. Sleeping 5.");
@@ -215,7 +205,21 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
         }
     }
 
-    private int waitCompletion(Session session) throws InterruptedException {
+	public static Connection testConnection(PrintStream logger, String host, int port) throws IOException {
+		logger.println("Connecting to " + host + " on port " + port + ". ");
+		Connection conn = new Connection(host, port);
+		// currently OpenSolaris offers no way of verifying the host certificate, so just accept it blindly,
+		// hoping that no man-in-the-middle attack is going on.
+		conn.connect(new ServerHostKeyVerifier() {
+			public boolean verifyServerHostKey(String hostname, int port, String serverHostKeyAlgorithm, byte[] serverHostKey) throws Exception {
+				return true;
+			}
+		});
+		logger.println("Connected via SSH.");
+		return conn; // successfully connected
+	}
+
+	private int waitCompletion(Session session) throws InterruptedException {
         // I noticed that the exit status delivery often gets delayed. Wait up to 1 sec.
         for( int i=0; i<10; i++ ) {
             Integer r = session.getExitStatus();

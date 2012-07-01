@@ -1,0 +1,8 @@
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:f="/lib/form">
+	<f:entry title="Instance IDs" description="IDs of the instances to stop. Whitespace separated." field="instances">
+		<f:textbox />
+	</f:entry>
+	<f:entry title="Terminate" description="Terminate the machines rather than just stop them" field="terminate">
+		<f:checkbox />
+	</f:entry>
+</j:jelly>

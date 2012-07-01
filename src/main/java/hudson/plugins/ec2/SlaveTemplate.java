@@ -241,7 +241,7 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
             Instance inst = ec2.runInstances(request).getReservation().getInstances().get(0);
 
             /* Now that we have our instance, we can set tags on it */
-            if (!tags.isEmpty()) {
+            if (tags != null && !tags.isEmpty()) {
                 HashSet<Tag> inst_tags = new HashSet<Tag>();
 
                 for(EC2Tag t : tags) {

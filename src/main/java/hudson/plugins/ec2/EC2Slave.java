@@ -151,24 +151,34 @@ public final class EC2Slave extends Slave {
      * Terminates the instance in EC2.
      */
     public void terminate() {
-        try {
-            AmazonEC2 ec2 = EC2Cloud.get().connect();
-            if (stopOnTerminate) {
-            	StopInstancesRequest request = new StopInstancesRequest(Collections.singletonList(getInstanceId()));
-            	ec2.stopInstances(request);
-                LOGGER.info("Terminated EC2 instance (stopped): "+getInstanceId());
-            } else {
-            	TerminateInstancesRequest request = new TerminateInstancesRequest(Collections.singletonList(getInstanceId()));
-            	ec2.terminateInstances(request);
-                LOGGER.info("Terminated EC2 instance (terminated): "+getInstanceId());
-            }
-            Hudson.getInstance().removeNode(this);
-        } catch (AmazonClientException e) {
-            LOGGER.log(Level.WARNING,"Failed to terminate EC2 instance: "+getInstanceId(),e);
-        } catch (IOException e) {
-            LOGGER.log(Level.WARNING,"Failed to terminate EC2 instance: "+getInstanceId(),e);
-        }
+		EC2Slave.terminate(EC2Cloud.get(), getInstanceId(), stopOnTerminate);
+
+		try {
+			Hudson.getInstance().removeNode(this);
+		} catch (IOException e) {
+			LOGGER.log(Level.WARNING,"Failed to terminate EC2 instance: "+getInstanceId(),e);
+		}
     }
+
+	/**
+	 * Terminates the instance in EC2.
+	 */
+	public static void terminate(EC2Cloud ec2Cloud, String instanceID, boolean stopOnTerminate) {
+		try {
+			AmazonEC2 ec2 = ec2Cloud.connect();
+			if (stopOnTerminate) {
+				StopInstancesRequest request = new StopInstancesRequest(Collections.singletonList(instanceID));
+				ec2.stopInstances(request);
+				LOGGER.info("Terminated EC2 instance (stopped): "+instanceID);
+			} else {
+				TerminateInstancesRequest request = new TerminateInstancesRequest(Collections.singletonList(instanceID));
+				ec2.terminateInstances(request);
+				LOGGER.info("Terminated EC2 instance (terminated): "+instanceID);
+			}
+		} catch (AmazonClientException e) {
+			LOGGER.log(Level.WARNING,"Failed to terminate EC2 instance: "+instanceID,e);
+		}
+	}
 
     String getRemoteAdmin() {
         if (remoteAdmin == null || remoteAdmin.length() == 0)
