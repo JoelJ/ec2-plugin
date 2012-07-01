@@ -49,7 +49,8 @@ public class StartEc2Builder extends Builder {
 			return false;
 		}
 
-		waitForAllMachines(newMachines, logger);
+		waitForAllMachinesAddress(newMachines, logger);
+		waitForAllMachinesSsh(newMachines, logger);
 
 		logger.println("Adding variables to the environment");
 		build.addAction(new Ec2MachineVariables(newMachines, listener.getLogger()));
@@ -57,8 +58,8 @@ public class StartEc2Builder extends Builder {
 		return true;
 	}
 
-	private void waitForAllMachines(List<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
-		logger.println("Waiting for SSH to come up on all machines.");
+	private void waitForAllMachinesAddress(List<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
+		logger.println("Waiting for all machines to acquire an address.");
 		int timeWaited = 0;
 		for (EC2Slave newMachine : newMachines) {
 			while(timeWaited < 10 * 60 * 1000) { //10 minutes TODO: make this user defined
@@ -70,7 +71,16 @@ public class StartEc2Builder extends Builder {
 				logger.println("Machine acquired address: " + newMachine.getInstanceId());
 				logger.println("\t- public dns: " + newMachine.getPublicDNS());
 				logger.println("\t- private dns: " + newMachine.getPrivateDNS());
+				break;
+			}
+		}
+	}
 
+	private void waitForAllMachinesSsh(List<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
+		logger.println("Waiting for SSH to come up on all machines.");
+		int timeWaited = 0;
+		for (EC2Slave newMachine : newMachines) {
+			while(timeWaited < 10 * 60 * 1000) { //10 minutes TODO: make this user defined
 				try {
 					EC2UnixLauncher.testConnection(logger, newMachine.getPublicDNS(), newMachine.getSshPort());
 					logger.println(newMachine.getInstanceId() + " is up and ready for action: " + newMachine.getPublicDNS() + ":" + newMachine.getSshPort());
