@@ -5,6 +5,7 @@ import hudson.model.Hudson;
 import hudson.plugins.ec2.EC2ComputerLauncher;
 import hudson.plugins.ec2.EC2Cloud;
 import hudson.plugins.ec2.EC2Computer;
+import hudson.plugins.ec2.EC2Slave;
 import hudson.remoting.Channel;
 import hudson.remoting.Channel.Listener;
 import hudson.slaves.ComputerLauncher;
@@ -44,29 +45,13 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
 
     @Override
 	protected void launch(EC2Computer computer, PrintStream logger, Instance inst) throws IOException, AmazonClientException, InterruptedException {
-
-        final Connection bootstrapConn;
-        final Connection conn;
         Connection cleanupConn = null; // java's code path analysis for final doesn't work that well.
         boolean successful = false;
         
         try {
-            bootstrapConn = connectToSsh(computer, logger);
-            int bootstrapResult = bootstrap(bootstrapConn, computer, logger);
-            if (bootstrapResult == FAILED)
-                return; // bootstrap closed for us.
-            else if (bootstrapResult == SAMEUSER)
-                cleanupConn = bootstrapConn; // take over the connection
-            else {
-                // connect fresh as ROOT
-                cleanupConn = connectToSsh(computer, logger);
-                KeyPair key = EC2Cloud.get().getKeyPair();
-                if (!cleanupConn.authenticateWithPublicKey(computer.getRemoteAdmin(), key.getKeyMaterial().toCharArray(), "")) {
-                    logger.println("Authentication failed");
-                    return; // failed to connect as root.
-                }
-            }
-            conn = cleanupConn;
+
+            final Connection conn = getConnection(computer.getNode(), logger);
+            cleanupConn = conn;
 
             SCPClient scp = conn.createSCPClient();
             String initScript = computer.getNode().initScript;
@@ -145,7 +130,28 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
         }
     }
 
-    private int bootstrap(Connection bootstrapConn, EC2Computer computer, PrintStream logger) throws IOException, InterruptedException, AmazonClientException {
+    private Connection getConnection(EC2Slave computer, PrintStream logger) throws InterruptedException, IOException {
+        Connection connection;
+
+        Connection bootstrapConn = connectToSsh(computer, logger);
+        int bootstrapResult = bootstrap(bootstrapConn, computer, logger);
+        if (bootstrapResult == FAILED) {
+            connection = null;
+        } else if (bootstrapResult == SAMEUSER) {
+            connection = bootstrapConn; // take over the connection
+        } else {
+            // connect fresh as ROOT
+            connection = connectToSsh(computer, logger);
+            KeyPair key = EC2Cloud.get().getKeyPair();
+            if (!connection.authenticateWithPublicKey(computer.getRemoteAdmin(), key.getKeyMaterial().toCharArray(), "")) {
+                logger.println("Authentication failed");
+                connection = null; // failed to connect as root.
+            }
+        }
+        return connection;
+    }
+
+    private int bootstrap(Connection bootstrapConn, EC2Slave computer, PrintStream logger) throws IOException, InterruptedException, AmazonClientException {
         boolean closeBootstrap = true;
         try {
             int tries = 20;
@@ -172,14 +178,14 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
         }
     }
 
-    private Connection connectToSsh(EC2Computer computer, PrintStream logger) throws AmazonClientException, InterruptedException {
+    private Connection connectToSsh(EC2Slave computer, PrintStream logger) throws AmazonClientException, InterruptedException {
         while(true) {
             try {
-                Instance instance = computer.updateInstanceDescription();
+                Instance instance = computer.describeInstance();
                 String vpc_id = instance.getVpcId();
                 String host;
 
-                if (computer.getNode().usePrivateDnsName) {
+                if (computer.usePrivateDnsName) {
                     host = instance.getPrivateDnsName();
                 } else {
                     /* VPC hosts don't have public DNS names, so we need to use an IP address instead */

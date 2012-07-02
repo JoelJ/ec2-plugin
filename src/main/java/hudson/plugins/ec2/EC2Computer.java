@@ -100,9 +100,7 @@ public class EC2Computer extends SlaveComputer {
     }
 
     private Instance _describeInstance() throws AmazonClientException {
-    	DescribeInstancesRequest request = new DescribeInstancesRequest();
-    	request.setInstanceIds(Collections.<String>singletonList(getNode().getInstanceId()));
-        return EC2Cloud.get().connect().describeInstances(request).getReservations().get(0).getInstances().get(0);
+        return getNode().describeInstance();
     }
 
     /**

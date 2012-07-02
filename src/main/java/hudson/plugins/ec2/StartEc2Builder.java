@@ -1,5 +1,9 @@
 package hudson.plugins.ec2;
 
+import com.amazonaws.services.ec2.model.KeyPair;
+import com.trilead.ssh2.Connection;
+import com.trilead.ssh2.SCPClient;
+import com.trilead.ssh2.Session;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.Launcher;
@@ -9,6 +13,7 @@ import hudson.model.BuildListener;
 import hudson.model.Descriptor;
 import hudson.plugins.ec2.ssh.EC2UnixLauncher;
 import hudson.tasks.Builder;
+import org.apache.commons.io.IOUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
 
 import java.io.IOException;
@@ -60,13 +65,25 @@ public class StartEc2Builder extends Builder {
 		waitForAllMachinesAddress(newMachines, logger);
         build.addAction(new Ec2MachineVariables(newMachines, listener.getLogger()));
         waitForAllMachinesSsh(newMachines, logger);
-
+        executeInitScripts(newMachines, logger);
         logger.println("Adding variables to the environment");
 
 		return true;
 	}
 
-	private void waitForAllMachinesAddress(List<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
+    private void executeInitScripts(List<EC2Slave> newMachines, PrintStream logger) {
+
+        for (EC2Slave newMachine : newMachines) {
+            String initScript = newMachine.initScript;
+            executeInitScript(newMachine, initScript, logger);
+        }
+    }
+
+    private void executeInitScript(EC2Slave newMachine, String initScript, PrintStream logger) {
+
+    }
+
+    private void waitForAllMachinesAddress(List<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
 		logger.println("Waiting for all machines to acquire an address.");
 		int timeWaited = 0;
 		for (EC2Slave newMachine : newMachines) {

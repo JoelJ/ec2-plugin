@@ -180,19 +180,19 @@ public final class EC2Slave extends Slave {
 		}
 	}
 
-    String getRemoteAdmin() {
+    public String getRemoteAdmin() {
         if (remoteAdmin == null || remoteAdmin.length() == 0)
             return "root";
         return remoteAdmin;
     }
 
-    String getRootCommandPrefix() {
+    public String getRootCommandPrefix() {
         if (rootCommandPrefix == null || rootCommandPrefix.length() == 0)
             return "";
         return rootCommandPrefix + " ";
     }
 
-    String getJvmopts() {
+    public String getJvmopts() {
         return Util.fixNull(jvmopts);
     }
 
@@ -267,6 +267,12 @@ public final class EC2Slave extends Slave {
             tag_request.withResources(inst.getInstanceId()).setTags(inst_tags);
             EC2Cloud.get().connect().createTags(tag_request);
         }
+    }
+
+    public Instance describeInstance() throws AmazonClientException {
+        DescribeInstancesRequest request = new DescribeInstancesRequest();
+        request.setInstanceIds(Collections.<String>singletonList(this.getInstanceId()));
+        return EC2Cloud.get().connect().describeInstances(request).getReservations().get(0).getInstances().get(0);
     }
 
     public String getPublicDNS() {
