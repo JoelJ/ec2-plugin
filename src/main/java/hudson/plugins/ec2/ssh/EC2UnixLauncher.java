@@ -31,11 +31,11 @@ import com.trilead.ssh2.Session;
  */
 public class EC2UnixLauncher extends EC2ComputerLauncher {
 
-    private final int FAILED=-1;
-    private final int SAMEUSER=0;
-    private final int RECONNECT=-2;
+    private static final int FAILED=-1;
+    private static final int SAMEUSER=0;
+    private static final int RECONNECT=-2;
     
-    protected String buildUpCommand(EC2Computer computer, String command) {
+    public static String buildUpCommand(EC2Slave computer, String command) {
     	if (!computer.getRemoteAdmin().equals("root")) {
     		command = computer.getRootCommandPrefix() + " " + command;
     	}
@@ -57,26 +57,9 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
             String initScript = computer.getNode().initScript;
 
             if(initScript!=null && initScript.trim().length()>0 && conn.exec("test -e ~/.hudson-run-init", logger) !=0) {
-                logger.println("Executing init script");
-                scp.put(initScript.getBytes("UTF-8"),"init.sh","/tmp","0700");
-                Session sess = conn.openSession();
-                sess.requestDumbPTY(); // so that the remote side bundles stdout and stderr
-                sess.execCommand(buildUpCommand(computer, "/tmp/init.sh"));
-
-                sess.getStdin().close();    // nothing to write here
-                sess.getStderr().close();   // we are not supposed to get anything from stderr
-                IOUtils.copy(sess.getStdout(),logger);
-
-                int exitStatus = waitCompletion(sess);
-                if (exitStatus!=0) {
-                    logger.println("init script failed: exit code="+exitStatus);
+                if(!executeInitScript(conn, computer.getNode(), initScript, logger)) {
                     return;
                 }
-
-                // Needs a tty to run sudo.
-                sess = conn.openSession();
-                sess.requestDumbPTY(); // so that the remote side bundles stdout and stderr
-                sess.execCommand(buildUpCommand(computer, "touch ~/.hudson-run-init"));
             }
 
             // TODO: parse the version number. maven-enforcer-plugin might help
@@ -93,12 +76,12 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
                     return;
                 }
 
-                if(conn.exec(buildUpCommand(computer, "tar xz -C /usr -f /tmp/" + jdk + ".tgz"), logger) !=0) {
+                if(conn.exec(buildUpCommand(computer.getNode(), "tar xz -C /usr -f /tmp/" + jdk + ".tgz"), logger) !=0) {
                     logger.println("Failed to install Java");
                     return;
                 }
 
-                if(conn.exec(buildUpCommand(computer, "ln -s /usr/" + jdk + "/bin/java /bin/java"), logger) !=0) {
+                if(conn.exec(buildUpCommand(computer.getNode(), "ln -s /usr/" + jdk + "/bin/java /bin/java"), logger) !=0) {
                     logger.println("Failed to symlink Java");
                     return;
                 }
@@ -130,7 +113,34 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
         }
     }
 
-    private Connection getConnection(EC2Slave computer, PrintStream logger) throws InterruptedException, IOException {
+    public static boolean executeInitScript(Connection connection, EC2Slave newMachine, String initScript, PrintStream logger) throws IOException, InterruptedException {
+        SCPClient scp = connection.createSCPClient();
+
+        logger.println("Executing init script");
+        scp.put(initScript.getBytes("UTF-8"),"init.sh","/tmp","0700");
+        Session sess = connection.openSession();
+        sess.requestDumbPTY(); // so that the remote side bundles stdout and stderr
+        sess.execCommand(EC2UnixLauncher.buildUpCommand(newMachine, "/tmp/init.sh"));
+
+        sess.getStdin().close();    // nothing to write here
+        sess.getStderr().close();   // we are not supposed to get anything from stderr
+        IOUtils.copy(sess.getStdout(),logger);
+
+        int exitStatus = EC2UnixLauncher.waitCompletion(sess);
+        if (exitStatus!=0) {
+            logger.println("init script failed: exit code="+exitStatus);
+            return false;
+        }
+
+        // Needs a tty to run sudo.
+        sess = connection.openSession();
+        sess.requestDumbPTY(); // so that the remote side bundles stdout and stderr
+        sess.execCommand(EC2UnixLauncher.buildUpCommand(newMachine, "touch ~/.hudson-run-init"));
+
+        return true;
+    }
+
+    public static Connection getConnection(EC2Slave computer, PrintStream logger) throws InterruptedException, IOException {
         Connection connection;
 
         Connection bootstrapConn = connectToSsh(computer, logger);
@@ -151,7 +161,7 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
         return connection;
     }
 
-    private int bootstrap(Connection bootstrapConn, EC2Slave computer, PrintStream logger) throws IOException, InterruptedException, AmazonClientException {
+    private static int bootstrap(Connection bootstrapConn, EC2Slave computer, PrintStream logger) throws IOException, InterruptedException, AmazonClientException {
         boolean closeBootstrap = true;
         try {
             int tries = 20;
@@ -178,7 +188,7 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
         }
     }
 
-    private Connection connectToSsh(EC2Slave computer, PrintStream logger) throws AmazonClientException, InterruptedException {
+    private static Connection connectToSsh(EC2Slave computer, PrintStream logger) throws AmazonClientException, InterruptedException {
         while(true) {
             try {
                 Instance instance = computer.describeInstance();
@@ -225,7 +235,7 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
 		return conn; // successfully connected
 	}
 
-	private int waitCompletion(Session session) throws InterruptedException {
+	public static int waitCompletion(Session session) throws InterruptedException {
         // I noticed that the exit status delivery often gets delayed. Wait up to 1 sec.
         for( int i=0; i<10; i++ ) {
             Integer r = session.getExitStatus();

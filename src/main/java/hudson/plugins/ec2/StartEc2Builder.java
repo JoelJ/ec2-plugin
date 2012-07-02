@@ -63,24 +63,30 @@ public class StartEc2Builder extends Builder {
 		}
 
 		waitForAllMachinesAddress(newMachines, logger);
-        build.addAction(new Ec2MachineVariables(newMachines, listener.getLogger()));
-        waitForAllMachinesSsh(newMachines, logger);
-        executeInitScripts(newMachines, logger);
+
         logger.println("Adding variables to the environment");
+        build.addAction(new Ec2MachineVariables(newMachines, listener.getLogger()));
+
+        waitForAllMachinesSsh(newMachines, logger);
+        executeInitScripts(newMachines, build.getEnvironment(listener), logger);
 
 		return true;
 	}
 
-    private void executeInitScripts(List<EC2Slave> newMachines, PrintStream logger) {
-
+    private void executeInitScripts(List<EC2Slave> newMachines, EnvVars var, PrintStream logger) {
         for (EC2Slave newMachine : newMachines) {
-            String initScript = newMachine.initScript;
-            executeInitScript(newMachine, initScript, logger);
+            String initScriptWithVars = newMachine.initScript;
+            String initScript = var.expand(initScriptWithVars);
+            Connection connection = null;
+            try {
+                connection = EC2UnixLauncher.getConnection(newMachine, logger);
+                EC2UnixLauncher.executeInitScript(connection, newMachine, initScript, logger);
+            } catch (InterruptedException e) {
+                e.printStackTrace(logger);
+            } catch (IOException e) {
+                e.printStackTrace(logger);
+            }
         }
-    }
-
-    private void executeInitScript(EC2Slave newMachine, String initScript, PrintStream logger) {
-
     }
 
     private void waitForAllMachinesAddress(List<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
