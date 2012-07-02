@@ -53,6 +53,10 @@ THE SOFTWARE.
 			<f:textbox/>
 		</f:entry>
 
+		<f:entry title="${%Init script}" field="initScript">
+			<f:textarea/>
+		</f:entry>
+
 		<f:advanced>
 			<f:entry title="${%Security groups}" field="securityGroups">
 				<f:textbox/>
@@ -76,10 +80,6 @@ THE SOFTWARE.
 
 			<f:entry title="${%Idle termination time}" field="idleTerminationMinutes">
 				<f:textbox default="30"/>
-			</f:entry>
-
-			<f:entry title="${%Init script}" field="initScript">
-				<f:textarea/>
 			</f:entry>
 
 			<f:entry title="${%User Data}" field="userData">
