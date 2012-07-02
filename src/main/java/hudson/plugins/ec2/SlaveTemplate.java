@@ -146,7 +146,7 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
     }
 
     public List<EC2Tag> getTags() {
-        return Collections.unmodifiableList(tags);
+        return tags == null ? Collections.<EC2Tag>emptyList() : Collections.unmodifiableList(tags);
     }
 
     public String getidleTerminationMinutes() {
