@@ -58,10 +58,10 @@ public class StartEc2Builder extends Builder {
 		}
 
 		waitForAllMachinesAddress(newMachines, logger);
-		waitForAllMachinesSsh(newMachines, logger);
+        build.addAction(new Ec2MachineVariables(newMachines, listener.getLogger()));
+        waitForAllMachinesSsh(newMachines, logger);
 
-		logger.println("Adding variables to the environment");
-		build.addAction(new Ec2MachineVariables(newMachines, listener.getLogger()));
+        logger.println("Adding variables to the environment");
 
 		return true;
 	}

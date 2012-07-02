@@ -21,16 +21,17 @@ public class Ec2MachineVariables extends EnvironmentAction {
 	private static Map<String, String> getVariablesFromMachines(Iterable<EC2Slave> machines, PrintStream listener) {
 		Map<String, String> result = new HashMap<String, String>();
 		StringBuilder instanceIds = new StringBuilder();
+		StringBuilder publicDnsBuilder = new StringBuilder();
+		StringBuilder privateDnsBuilder = new StringBuilder();
 		for (EC2Slave slave : machines) {
-			String id = slave.getInstanceId();
-			instanceIds.append(id).append(' ');
+            instanceIds.append(slave.getInstanceId()).append(' ');
+            publicDnsBuilder.append(slave.getPublicDNS()).append(' ');
+            privateDnsBuilder.append(slave.getPrivateDNS()).append(' ');
 
-			addVariable(result, listener, id + "_publicDns", slave.getPublicDNS());
-			addVariable(result, listener, id + "_privateDns", slave.getPrivateDNS());
-			addVariable(result, listener, id + "_jvmopts", slave.getJvmopts());
-			addVariable(result, listener, id + "_remoteAdmin", slave.getRemoteAdmin());
 		}
 		addVariable(result, listener, "instances", instanceIds.toString().trim());
+		addVariable(result, listener, "publicDns", publicDnsBuilder.toString().trim());
+		addVariable(result, listener, "privateDns", privateDnsBuilder.toString().trim());
 
 		return result;
 	}
