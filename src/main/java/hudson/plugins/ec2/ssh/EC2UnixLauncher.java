@@ -118,24 +118,40 @@ public class EC2UnixLauncher extends EC2ComputerLauncher {
 
         logger.println("Executing init script");
         scp.put(initScript.getBytes("UTF-8"),"init.sh","/tmp","0700");
-        Session sess = connection.openSession();
-        sess.requestDumbPTY(); // so that the remote side bundles stdout and stderr
-        sess.execCommand(EC2UnixLauncher.buildUpCommand(newMachine, "/tmp/init.sh"));
+        Session sess = null;
+        try {
+            sess = connection.openSession();
+            sess.requestDumbPTY(); // so that the remote side bundles stdout and stderr
+            sess.execCommand(EC2UnixLauncher.buildUpCommand(newMachine, "/tmp/init.sh"));
 
-        sess.getStdin().close();    // nothing to write here
-        sess.getStderr().close();   // we are not supposed to get anything from stderr
-        IOUtils.copy(sess.getStdout(),logger);
-
-        int exitStatus = EC2UnixLauncher.waitCompletion(sess);
-        if (exitStatus!=0) {
-            logger.println("init script failed: exit code="+exitStatus);
-            return false;
+            sess.getStdin().close();    // nothing to write here
+            sess.getStderr().close();   // we are not supposed to get anything from stderr
+        } finally {
+            if (sess != null) {
+                sess.close();
+            }
         }
+        try {
+            IOUtils.copy(sess.getStdout(),logger);
 
-        // Needs a tty to run sudo.
-        sess = connection.openSession();
-        sess.requestDumbPTY(); // so that the remote side bundles stdout and stderr
-        sess.execCommand(EC2UnixLauncher.buildUpCommand(newMachine, "touch ~/.hudson-run-init"));
+            int exitStatus = EC2UnixLauncher.waitCompletion(sess);
+            if (exitStatus!=0) {
+                try {
+                    logger.println("init script failed: exit code="+exitStatus);
+                }
+                finally {
+                    sess.close();
+                }
+                return false;
+            }
+
+            // Needs a tty to run sudo.
+            sess = connection.openSession();
+            sess.requestDumbPTY(); // so that the remote side bundles stdout and stderr
+            sess.execCommand(EC2UnixLauncher.buildUpCommand(newMachine, "touch ~/.hudson-run-init"));
+        } finally {
+            sess.close();
+        }
 
         return true;
     }

@@ -86,6 +86,11 @@ public class StartEc2Builder extends Builder {
             } catch (IOException e) {
                 e.printStackTrace(logger);
             }
+            finally {
+                if (connection != null) {
+                    connection.close();
+                }
+            }
         }
     }
 
