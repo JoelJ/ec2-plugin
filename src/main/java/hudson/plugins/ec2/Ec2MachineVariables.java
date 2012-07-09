@@ -23,16 +23,22 @@ public class Ec2MachineVariables extends EnvironmentAction {
 		StringBuilder instanceIds = new StringBuilder();
 		StringBuilder publicDnsBuilder = new StringBuilder();
 		StringBuilder privateDnsBuilder = new StringBuilder();
-		for (EC2Slave slave : machines) {
-            instanceIds.append(slave.getInstanceId()).append(' ');
-            publicDnsBuilder.append(slave.getPublicDNS()).append(' ');
-            privateDnsBuilder.append(slave.getPrivateDNS()).append(' ');
-
+        int i = 0;
+        for (EC2Slave slave : machines) {
+            String instanceId = slave.getInstanceId();
+            String publicDns = slave.getPublicDNS();
+            String privateDns = slave.getPrivateDNS();
+            instanceIds.append(instanceId).append(' ');
+            publicDnsBuilder.append(publicDns).append(' ');
+            privateDnsBuilder.append(privateDns).append(' ');
+            addVariable(result, listener, "instance" + i, instanceId);
+            addVariable(result, listener, "publicDns" + i, publicDns);
+            addVariable(result, listener, "privateDns" + i, privateDns);
+            i++;
 		}
-		addVariable(result, listener, "instances", instanceIds.toString().trim());
-		addVariable(result, listener, "publicDns", publicDnsBuilder.toString().trim());
-		addVariable(result, listener, "privateDns", privateDnsBuilder.toString().trim());
-
+        addVariable(result, listener, "instance", instanceIds.toString().trim());
+        addVariable(result, listener, "publicDns", publicDnsBuilder.toString().trim());
+        addVariable(result, listener, "privateDns", privateDnsBuilder.toString().trim());
 		return result;
 	}
 

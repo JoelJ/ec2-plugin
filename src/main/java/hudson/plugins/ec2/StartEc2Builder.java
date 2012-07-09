@@ -1,9 +1,6 @@
 package hudson.plugins.ec2;
 
-import com.amazonaws.services.ec2.model.KeyPair;
 import com.trilead.ssh2.Connection;
-import com.trilead.ssh2.SCPClient;
-import com.trilead.ssh2.Session;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.Launcher;
@@ -13,14 +10,17 @@ import hudson.model.BuildListener;
 import hudson.model.Descriptor;
 import hudson.plugins.ec2.ssh.EC2UnixLauncher;
 import hudson.tasks.Builder;
-import org.apache.commons.io.IOUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.ArrayList;
+import java.io.PrintWriter;
+import java.net.Socket;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * User: Joel Johnson
@@ -37,50 +37,94 @@ public class StartEc2Builder extends Builder {
 
 	@Override
 	public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener) throws InterruptedException, IOException {
-		List<EC2Slave> newMachines = new ArrayList<EC2Slave>(templates.size());
-		PrintStream logger = listener.getLogger();
-		try {
-			int cloudNumber = 0;
-			for (SlaveTemplate template : templates) {
-				int count = getCountFromTags(template.getTags(), logger);
-				for(int i = 0; i < count; i++) {
-					template.parent = EC2Cloud.get(); //TODO: allow user to select which cloud service to use
-					EnvVars envVars = build.getEnvironment(listener);
-					envVars.put("CLOUD_NUMBER", "" + (cloudNumber++)); //Allow the user to use this in their tags
-					EC2Slave newMachine = template.provision(envVars, listener);
-					newMachines.add(newMachine);
+        Map<EC2Slave, SlaveTemplate> newMachines = new LinkedHashMap<EC2Slave, SlaveTemplate>();
+        PrintStream logger = listener.getLogger();
+        try {
+            int cloudNumber = 0;
+            for (SlaveTemplate template : templates) {
+                int count = getCountFromTags(template.getTags(), logger);
+                for (int i = 0; i < count; i++) {
+                    template.parent = EC2Cloud.get(); //TODO: allow user to select which cloud service to use
+                    EnvVars envVars = build.getEnvironment(listener);
+                    envVars.put("CLOUD_NUMBER", "" + (cloudNumber++)); //Allow the user to use this in their tags
+                    EC2Slave newMachine = template.provision(envVars, listener);
+                    newMachines.put(newMachine, template);
 
-					logger.println("Created machine " + newMachine.getInstanceId());
-				}
-			}
-		} catch(Exception e) {
-			//TODO: If we get throttled on a request minute, sleep and then retry. I don't know what the limit is or what exception is thrown
-			listener.error("Failed to start a machine. Attempting to terminate.");
-			e.printStackTrace(logger);
+                    logger.println("Created machine " + newMachine.getInstanceId());
+                }
+            }
+        } catch (Exception e) {
+            //TODO: If we get throttled on a request minute, sleep and then retry. I don't know what the limit is or what exception is thrown
+            listener.error("Failed to start a machine. Attempting to terminate.");
+            e.printStackTrace(logger);
 
-			silentlyTerminate(newMachines, listener);
-			return false;
-		}
+            silentlyTerminate(newMachines.keySet(), listener);
+            return false;
+        }
 
-		waitForAllMachinesAddress(newMachines, logger);
+        waitForAllMachinesAddress(newMachines.keySet(), logger);
 
         logger.println("Adding variables to the environment");
-        build.addAction(new Ec2MachineVariables(newMachines, listener.getLogger()));
+        build.addAction(new Ec2MachineVariables(newMachines.keySet(), listener.getLogger()));
 
-        waitForAllMachinesSsh(newMachines, logger);
-        executeInitScripts(newMachines, build.getEnvironment(listener), logger);
+        waitForAllMachinesSsh(newMachines.keySet(), logger);
+        executeInitScripts(newMachines.keySet(), build.getEnvironment(listener), logger);
+        createClientConnections(newMachines, build.getEnvironment(listener), logger);
 
-		return true;
-	}
+        return true;
+    }
 
-    private void executeInitScripts(List<EC2Slave> newMachines, EnvVars var, PrintStream logger) {
+    private void createClientConnections(Map<EC2Slave, SlaveTemplate> newMachines, EnvVars environment, PrintStream logger) {
+
+        for (Map.Entry<EC2Slave, SlaveTemplate> newMachine : newMachines.entrySet()) {
+            String privateDnsVar = newMachine.getValue().privateDns;
+            if (privateDnsVar != null) {
+                String privateDns = environment.expand(privateDnsVar);
+                if(!privateDns.isEmpty() && !privateDnsVar.equals(privateDns)) {
+                    PrintWriter pw = null;
+                    Socket socket = null;
+                    try {
+                        String publicDNS = newMachine.getKey().publicDNS;
+                        logger.println("Connecting to " + publicDNS);
+                        socket = new Socket(publicDNS, 40000);
+                        pw = new PrintWriter(socket.getOutputStream());
+                        pw.println(privateDns);
+                        pw.flush();
+                        pw.close();
+                        socket.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    } finally {
+                        if (socket != null) {
+                            try {
+                                socket.close();
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                        if (pw != null) {
+                            pw.flush();
+                            pw.close();
+                        }
+                    }
+                } else {
+                    logger.printf("privateDns was '%s'%n", privateDns);
+                }
+
+            }
+        }
+    }
+
+    private void executeInitScripts(Set<EC2Slave> newMachines, EnvVars var, PrintStream logger) {
         for (EC2Slave newMachine : newMachines) {
             String initScriptWithVars = newMachine.initScript;
             String initScript = var.expand(initScriptWithVars);
             Connection connection = null;
             try {
-                connection = EC2UnixLauncher.getConnection(newMachine, logger);
-                EC2UnixLauncher.executeInitScript(connection, newMachine, initScript, logger);
+                if(initScript != null && !initScript.isEmpty()) {
+                    connection = EC2UnixLauncher.getConnection(newMachine, logger);
+                    EC2UnixLauncher.executeInitScript(connection, newMachine, initScript, logger);
+                }
             } catch (InterruptedException e) {
                 e.printStackTrace(logger);
             } catch (IOException e) {
@@ -94,7 +138,7 @@ public class StartEc2Builder extends Builder {
         }
     }
 
-    private void waitForAllMachinesAddress(List<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
+    private void waitForAllMachinesAddress(Set<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
 		logger.println("Waiting for all machines to acquire an address.");
 		int timeWaited = 0;
 		for (EC2Slave newMachine : newMachines) {
@@ -138,7 +182,7 @@ public class StartEc2Builder extends Builder {
 		return count <= 0 ? 1 : count; //just double check that we're not returning an value less than 1
 	}
 
-	private void waitForAllMachinesSsh(List<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
+	private void waitForAllMachinesSsh(Set<EC2Slave> newMachines, PrintStream logger) throws InterruptedException {
 		logger.println("Waiting for SSH to come up on all machines.");
 		int timeWaited = 0;
 		for (EC2Slave newMachine : newMachines) {
@@ -155,12 +199,12 @@ public class StartEc2Builder extends Builder {
 	}
 
 	private int waiting(PrintStream logger) throws InterruptedException {
-		logger.println("Waiting for SSH to come up. Sleeping 5.");
+		logger.println("Waiting for machine to come up. Sleeping 5.");
 		Thread.sleep(5000);
 		return 5000;
 	}
 
-	private void silentlyTerminate(List<EC2Slave> newMachines, BuildListener listener) {
+	private void silentlyTerminate(Set<EC2Slave> newMachines, BuildListener listener) {
 		for (EC2Slave newMachine : newMachines) {
 			listener.error("terminating " + newMachine.getInstanceId());
 			newMachine.terminate();

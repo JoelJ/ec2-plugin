@@ -51,6 +51,7 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
     public final String jvmopts;
     public final String subnetId;
     public final String idleTerminationMinutes;
+    public final String privateDns;
     public final boolean stopOnTerminate;
     private final List<EC2Tag> tags;
     public final boolean usePrivateDnsName;
@@ -61,13 +62,14 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
 	private transient /*almost final*/ Set<String> securityGroupSet;
 
     @DataBoundConstructor
-    public SlaveTemplate(String ami, String zone, String securityGroups, String remoteFS, String sshPort, InstanceType type, String labelString, String description, String initScript, String userData, String numExecutors, String remoteAdmin, String rootCommandPrefix, String jvmopts, boolean stopOnTerminate, String subnetId, List<EC2Tag> tags, String idleTerminationMinutes, boolean usePrivateDnsName ) {
+    public SlaveTemplate(String ami, String zone, String securityGroups, String remoteFS, String sshPort, InstanceType type, String labelString, String description, String initScript, String userData, String numExecutors, String remoteAdmin, String rootCommandPrefix, String jvmopts, String privateDns, boolean stopOnTerminate, String subnetId, List<EC2Tag> tags, String idleTerminationMinutes, boolean usePrivateDnsName) {
         this.ami = ami;
         this.zone = zone;
         this.securityGroups = securityGroups;
         this.remoteFS = remoteFS;
         this.sshPort = sshPort;
         this.type = type;
+        this.privateDns = privateDns;
         this.labels = Util.fixNull(labelString);
         this.description = description;
         this.initScript = initScript;
